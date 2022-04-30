@@ -13,18 +13,18 @@ RTC_DS1307 rtc;// SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 #define LIGHT_SENSOR A2 // def a2
 #define TEMP_SENS A1 // def a1
 #define resetPin 12 // reset pin for manual reset
-#define test_mode 1 // if in test mode, value is greater than 0
+#define test_mode 0 // if in test mode, value is greater than 0
 
 // functon params
 #define sens 1 // def 1, this is the sensitivity for the hysteresis evaluation, which is the "noise" on the sensor, it has to be determined manually depending on the position of the sensor. try it a few times with the sensor_det code
 #define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
-#define DAWN 50 // this is the value at which the door starts opening (it is similar to dusk)
+#define DAWN 60 // this is the value at which the door starts opening (it is the same as dusk)
 #define DAY 600 // def 700, this is the value at which it is definitely day
-#define buff 130 // this is how long the dawn should last after sunrise, in minutes
+#define buff 80 // this is how long the dawn should last after sunrise, in minutes
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
-#define T_MOT 40 // def 27, the time it takes the motor to close in seconds
+#define T_MOT 45 // def 27, the time it takes the motor to close in seconds
 #define second_1 1000 // def 1000, one second, can be shortened for debug 
 
 // location params
@@ -33,7 +33,9 @@ double lat {47.3739}; // your latitude
 double lon  {8.5451}; // your longitude
 int tz {2}; // your timezone vs UTC.
 int spring {86}; // the day number when daylight saving comes in this year (2022)
-int fall {304}; // the day number when daylight saving goes away this year (2022)
+int fall {304}; // the day number when daylight saving goes away this year (2022)int v_on;
+int v_off;
+int v_on;
 
 // script speed params
 int INTEG {15}; // def 15, how many iterations for the sensor averaging
@@ -44,42 +46,89 @@ int waiting {2}; // time to wait within a state
 // init the variables used in  script
 int count {0};
 int day_ct {0};
-int v_on;
-int v_off;
+
 const double rad {57296}; // denominator for radians
 const double deg {57296}; // numerator for degree
 int srise {0};
 int sset {0};
 
 // function definition, mathematical
+int check_date (DateTime now) {
+  int day_t = now.day();
+  int feb = 28;
+  if ( (now.year() % 4 == 0 && now.year() % 100 !=0 ) || (now.year() % 400 == 0)) {
+    feb = 29;
+  }
+  switch (now.month()){
+    case 2:
+      day_t += 31;
+      break;
+    case 3:
+      day_t += 31 + feb;
+      break;
+    case 4:
+      day_t += 31 * 2 + feb;
+      break;
+    case 5:
+      day_t += 31 * 2 + feb + 30;
+      break;
+    case 6:
+      day_t += 31*3 + feb + 30;
+      break;
+    case 7:
+      day_t += 31*3 + feb + 30*2;
+      break;
+    case 8:
+      day_t += 31*4 + feb + 30*2;
+      break;
+    case 9:
+      day_t += 31*4 + feb + 30*3;
+      break;
+    case 10:
+      day_t += 31*5 + feb + 30*3;
+      break;
+    case 11:
+      day_t += 31*6 + feb + 30*3;
+      break;
+    case 12:
+      day_t += 31*6 + feb + 30*4;
+      break;
+  }
+  return day_t;
+}
+
 int sun_time(double LAT, double LON, int TZ, DateTime now){
     int day_y = now.unixtime() / 86400L;
-    if (day_y < spring || day_y > fall){
+    int day_t = check_date(now);
+    if (day_t < spring || day_t > fall){
       TZ = 1;
     }
-    double j_day = day_y + 25569 + 2415018.5 + (int(now.hour())/24 - TZ/24); // the 25569 is the time in days between excel's 0 and unix 
-    double j_cen = (j_day - 2451545)/36525;
+    double j_day = double(day_y) + 25569.0 + 2415018.5 + (now.hour()/24.0 + now.minute()/1440.0) - double(TZ)/24.0; // the 25569 is the time in days between excel's 0 and unix 
+    double j_cen = (j_day - 2451545)/36525; //2451545)/36525
     double moe = 23 + (26 + ((double(21.448) - j_cen * (double(46.815) + j_cen * (double(0.00059) - 
-                            (j_cen*double(0.001813))))))/float(60))/float(60);
-    double gmas = double(357.52911) + j_cen * (double(35999.05029) - (double(0.0001537) * j_cen));
-    double sec = sin(float(gmas * 1000/rad))*(double(1.914602) - j_cen * (double(0.004817) + (double(0.000014) * j_cen))) + 
-                  sin(double(2*gmas * 1000/rad))*(double(0.019993) - (double(0.000101)*j_cen)) + 
-                  sin(double(3*gmas*1000/rad))*double(0.000289);
-    double gml = fmod(double(280.46646) + j_cen * (double(36000.76983) + (j_cen * double(0.0003032))),float(360.00));
-    double stl = gml + sec;
-    double oc = moe + double(0.00256) * cos((float(125.04)-double(1934.136)*j_cen)*1000/rad); // degrees
-    double sal = stl - double(0.00569)-(double(0.00478)*sin((float(125.04) -(double(1934.136) * j_cen))*1000/rad)); // degrees
-    double sd = deg/1000*asin(sin(double(oc * 1000/rad))*sin(double(sal * 1000/rad))); // degrees
+                            (j_cen*double(0.001813))))))/double(60))/double(60);
     
+    double gmas = double(357.52911) + j_cen * (double(35999.05029) - (double(0.0001537) * j_cen));
+    
+    double sec = sin(radians(double(gmas)))*(double(1.914602) - j_cen * (double(0.004817) + (double(0.000014) * j_cen))) + 
+                  sin(radians(2*gmas))*(double(0.019993) - (double(0.000101)*j_cen)) + 
+                  sin(radians(double(3*gmas)))*double(0.000289);
+    
+    double gml = fmod(double(280.46646) + j_cen * (double(36000.76983) + (j_cen * double(0.0003032))),double(360.00));
+    double stl = gml + sec;
+    double oc = moe + double(0.00256) * cos(radians((double(125.04)-double(1934.136)*j_cen))); // degrees
+    double sal = stl - double(0.00569)-(double(0.00478)*sin(radians((double(125.04) -(double(1934.136) * j_cen))))); // degrees
+    double sd = degrees(asin(sin(double(radians(oc)))*sin(double(radians(sal))))); // degrees
     double eeo = double(0.016708634) - (j_cen * (double(0.000042037) + (double(0.0000001267) * j_cen)));
-    double y = tan(double(oc/2.0*long(1000)/rad))*tan(double(oc/2.0*1000/rad));
-    double eqtime = 4.0 * deg/1000 * (y * sin(double(2.0*gml*long(1000)/rad)) - 
-                                        (2.0*eeo*sin(double(gmas*1000/rad))) + 
-                                        (4.0*eeo*y*sin(double(gmas*1000/rad)) * cos(double(2.0*gml*1000/rad))) -
-                                        (float(0.5)*y*y*sin(double(4.0*1000/rad*gml))) -
-                                        (float(1.25)*eeo*eeo*sin(double(2.0*gmas*1000/rad)))); // minutes
+    double y = tan(double(radians(oc)/2.0))*tan(double(radians(oc)/2.0));
+    double eqtime = 4.0 * degrees(y * sin(double(2.0*radians(gml))) - 
+                                        (2.0*eeo*sin(double(radians(gmas)))) + 
+                                        (4.0*eeo*y*sin(double(radians(gmas))) * cos(double(2.0*radians(gml)))) -
+                                        (double(0.5)*y*y*sin(double(4.0*radians(gml)))) -
+                                        (double(1.25)*eeo*eeo*sin(double(2.0*radians(gmas))))); // minutes
     int noon = 720 - 4*LON - eqtime + TZ*60; // minutes
-    double ha = acos((cos(double(90.833) *1000/rad)/(cos(LAT*1000/rad) * cos(sd*1000/rad)))- (tan(LAT*1000/rad) * tan(sd*1000/rad)))*deg/1000; // degrees
+    double ha = degrees(acos(cos(radians(double(90.833)))/(cos(radians(LAT)) * 
+            cos(radians(sd))) - tan(radians(LAT)) * tan(radians(sd)))); // degrees
     srise = noon - ha * 4;
     sset = noon + ha * 4;
     }
@@ -97,18 +146,18 @@ int averageTemp(){
   return temp;
 }
 
-int averageLight(){
+int averageLight(int integ, int average_t){
   int result = 0;
-  for (int i = 1; i <= INTEG; i++){
+  for (int i = 1; i <= integ; i++){
     result += analogRead(LIGHT_SENSOR);
-    delay(average_time); 
+    delay(average_t); 
   }
   delay(second_1 * 5);
-  for (int i = 1; i <= INTEG; i++){
+  for (int i = 1; i <= integ; i++){
     result += analogRead(LIGHT_SENSOR);
-    delay(average_time); 
+    delay(average_t); 
   }
-  return result /= (INTEG*2);
+  return result /= (integ*2);
 }
 
 // operational functions
@@ -128,7 +177,7 @@ enum timeofday{night, dawn, day_, sundown, dusk, between_states};
 
 int checktime(){
   DateTime now = rtc.now();
-  int light_val = averageLight();
+  int light_val = averageLight(INTEG, average_time);
   int tm_mins = (now.hour()*60)+now.minute();
   
   if ((tm_mins > (sset+buff)) || (tm_mins < (srise - buff))){
@@ -139,7 +188,12 @@ int checktime(){
   else if ((tm_mins >= (srise - buff)) && (tm_mins <= (srise + buff))){
     if (light_val > DAWN){
       Serial.println("Dawn code");
-      count += 1;
+      if (count = RPT){
+        count = RPT + 1;
+      }
+      else {
+        count += 1;  
+      }
       day_ct = 0;
       return dawn;
     }
@@ -169,6 +223,7 @@ int checktime(){
       }
       else {
         Serial.println("dusk code, night case");
+        day_ct = 0;
         return night;
       }
     }
@@ -239,6 +294,12 @@ int nightBlink(int duration){
 void printTimes(const char *moment, DateTime now, int lightval){
       if (test_mode > 0){
         Serial.println(moment);
+        Serial.print(now.year());
+        Serial.print(" - ");
+        Serial.print(now.day());
+        Serial.print(" - ");
+        Serial.print(now.month());
+        Serial.print(" ");
         Serial.print(now.hour());
         Serial.print(":");
         Serial.print(now.minute());
@@ -253,6 +314,10 @@ void printTimes(const char *moment, DateTime now, int lightval){
         Serial.print("\n");
         Serial.print(lightval);
         Serial.print("\n");
+        Serial.print(" close sensor = ");
+        Serial.print(digitalRead(CL_SENS));
+        Serial.print("\n");
+        Serial.println(count);
       }
 }
 
@@ -298,7 +363,7 @@ void setup() {
   sun_time(lat,lon,tz,now);
 }
 void loop() {
-  // int analogValue = averageLight();
+  int lightval = averageLight(1,50);
   DateTime now = rtc.now();
   int check = checktime();
   if (test_mode > 0){
@@ -310,7 +375,7 @@ void loop() {
   }
   switch(check){
     case night:
-      printTimes("night executions", now, averageLight());
+      printTimes("night executions", now, lightval);
       ledBlink(300,1500);
       TempLamp();
       nightBlink(80);
@@ -320,31 +385,36 @@ void loop() {
       }
       break;
     case dawn:
-      printTimes("dawn executions", now, averageLight());
+      printTimes("dawn executions", now, lightval);
       ledBlink(300,300);
       nightBlink(10);
       digitalWrite(REL_RD, v_off);
       switch(count){
         case RPT:
-          openDoor(); // if it is closed, open for 40 seconds
-          digitalWrite(REL_LAMP,v_off);  
+          openDoor();
+          digitalWrite(REL_LAMP,v_off);
+          break;
+        case RPT+1:
+          if (digitalRead(CL_SENS) < 1){
+            openDoor();
+          }
           break;
         default:
           delay(second_1*5);
           break;
-        }
+      }
       break;
     case day_:
-      printTimes("day executions", now, averageLight());
+      printTimes("day executions", now, lightval);
       ledBlink(1500,1500);
-      if (digitalRead(CL_SENS) < 1 && day_ct > 1){
+      if (digitalRead(CL_SENS) < 1 && day_ct > 0 && day_ct <= 10){
         openDoor();
       }
       wait_minutes(waiting);
       digitalWrite(REL_RD,v_off);
       break;
     case sundown:
-      printTimes("sundown executions", now, averageLight());
+      printTimes("sundown executions", now, lightval);
       ledBlink(600,300);
       if (digitalRead(CL_SENS) > 0){
         digitalWrite(REL_RD,v_on);  
@@ -356,12 +426,13 @@ void loop() {
       delay(second_1);
       break;
     case dusk:
-      printTimes("dusk executions", now, averageLight());
+      printTimes("dusk executions", now, lightval);
       digitalWrite(REL_BLINK,v_on);
-      wait_minutes(waiting*5);
+      wait_minutes(waiting);
       closeDoor();
       wait_minutes(1);
       digitalWrite(resetPin,LOW);
+      // resetFunc();
       break;
     case between_states:
       Serial.println("interstate executions");  
