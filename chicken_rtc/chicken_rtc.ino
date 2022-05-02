@@ -1,8 +1,10 @@
 #include <RTClib.h>
 #include "math.h"
 #include "Wire.h"
+#include "rgb_lcd.h"
 
 RTC_DS1307 rtc;// SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
+rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 
 #define REL_OP 4 //def 4 this is the command to open the door, on relay 3
 #define REL_CL 5 // def 5 this is the command to close the door, on relay 2
@@ -134,13 +136,13 @@ int sun_time(double LAT, double LON, int TZ, DateTime now){
     }
 
 
-int averageTemp(){
+int averageTemp(int integ, int average_t){
   int tmp = 0;
-  for (int i = 1; i<=INTEG; i++){
+  for (int i = 1; i<=integ; i++){
     tmp += analogRead(TEMP_SENS);
-    delay(average_time);
+    delay(average_t);
   }
-  float R = 1023.0/(tmp/INTEG)-1.0;
+  float R = 1023.0/(tmp/integ)-1.0;
   R = 100000*R;
   float temp = 1.0/(log(R/100000)/4299+1/298.15)-273.15;
   return temp;
@@ -163,7 +165,7 @@ int averageLight(int integ, int average_t){
 // operational functions
 
 int TempLamp(){
-  if (averageTemp() <= criticalT){
+  if (averageTemp(INTEG, average_time) <= criticalT){
     digitalWrite(REL_LAMP,v_on);
     delay(second_1);
   }
@@ -291,34 +293,30 @@ int nightBlink(int duration){
   delay(second_1*5);
 }
 
-void printTimes(const char *moment, DateTime now, int lightval){
-      if (test_mode > 0){
-        Serial.println(moment);
-        Serial.print(now.year());
-        Serial.print(" - ");
-        Serial.print(now.day());
-        Serial.print(" - ");
-        Serial.print(now.month());
-        Serial.print(" ");
-        Serial.print(now.hour());
-        Serial.print(":");
-        Serial.print(now.minute());
-        Serial.print("\n");
-        Serial.print(srise/60);
-        Serial.print(":");
-        Serial.print(srise%60);
-        Serial.print(" , ");
-        Serial.print(sset/60);
-        Serial.print(":");
-        Serial.print(sset%60);
-        Serial.print("\n");
-        Serial.print(lightval);
-        Serial.print("\n");
-        Serial.print(" close sensor = ");
-        Serial.print(digitalRead(CL_SENS));
-        Serial.print("\n");
-        Serial.println(count);
-      }
+void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
+      lcd.setRGB(r,g,b);
+      delay(1000);
+      lcd.clear();
+      delay(500);
+      lcd.setCursor(0,0);
+      String string = String(now.hour())+ ":" + now.minute()+",";
+      lcd.print(string);
+      lcd.setCursor(5,0);
+      String string2 = String("L") + lightval;
+      lcd.print(string2);
+      lcd.setCursor(10,0);
+      String string3 = String("D") + digitalRead(CL_SENS);
+      lcd.print(string3);
+      lcd.setCursor(12,0);
+      String string4 = String("T") + tempval;               
+      lcd.print(string4);
+      lcd.setCursor(0,1);
+      String string5 = String("SR") + srise/60 + ":" + srise%60;
+      lcd.print(string5);
+      lcd.setCursor(7,1); 
+      String string6 = String("SD") + sset/60 + ":" + sset%60;
+      lcd.print(string6);
+      lcd.home();
 }
 
 void(* resetFunc) (void) = 0; //declare reset function at address 0, to reset the arduino at the end of one loop (night)
@@ -327,9 +325,9 @@ void setup() {
   // put your setup code here, to run once:
   digitalWrite(resetPin,HIGH);
   pinMode(resetPin,OUTPUT);
-  Serial.begin(9600);
   pinMode(10, OUTPUT);
   digitalWrite(10, HIGH);
+  lcd.begin(16,2);
   if (! rtc.begin()) {
     while(true){
       ledBlink(50,50);
@@ -363,8 +361,9 @@ void setup() {
   sun_time(lat,lon,tz,now);
 }
 void loop() {
-  int lightval = averageLight(1,50);
+  int lightval = averageLight(5,100);
   DateTime now = rtc.now();
+  int tempval = averageTemp(5,100); 
   int check = checktime();
   if (test_mode > 0){
     int INTEG = 1; // def 10, how many iterations for the sensor averaging
@@ -375,7 +374,7 @@ void loop() {
   }
   switch(check){
     case night:
-      printTimes("night executions", now, lightval);
+      printTimes(0,0,0, now, lightval, tempval);
       ledBlink(300,1500);
       TempLamp();
       nightBlink(80);
@@ -385,7 +384,7 @@ void loop() {
       }
       break;
     case dawn:
-      printTimes("dawn executions", now, lightval);
+      printTimes(0,0,0, now, lightval, tempval);
       ledBlink(300,300);
       nightBlink(10);
       digitalWrite(REL_RD, v_off);
@@ -405,7 +404,7 @@ void loop() {
       }
       break;
     case day_:
-      printTimes("day executions", now, lightval);
+      printTimes(0,0,0, now, lightval, tempval);
       ledBlink(1500,1500);
       if (digitalRead(CL_SENS) < 1 && day_ct > 0 && day_ct <= 10){
         openDoor();
@@ -414,7 +413,7 @@ void loop() {
       digitalWrite(REL_RD,v_off);
       break;
     case sundown:
-      printTimes("sundown executions", now, lightval);
+      printTimes(0,0,0, now, lightval, tempval);
       ledBlink(600,300);
       if (digitalRead(CL_SENS) > 0){
         digitalWrite(REL_RD,v_on);  
@@ -426,7 +425,7 @@ void loop() {
       delay(second_1);
       break;
     case dusk:
-      printTimes("dusk executions", now, lightval);
+      printTimes(0,0,0, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
       wait_minutes(waiting);
       closeDoor();
