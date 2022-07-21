@@ -11,6 +11,8 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 #define REL_RD 8 // def 8 this is the switch to turn on the radio and the motion sensor light, on relay 4
 #define REL_LAMP 2 // def 2 this is the switch to turn on the heating lamp, on relay 1
 #define REL_BLINK 3 // the relay for the blinker
+#define adjust_time 7 // the pin to short when adjusting the time
+#define additional_power 10 // the pin to provide additional power
 #define CL_SENS 6 // def 6 the switch, that bridges ground to digital pin 6 to detect when it is closed (0 is closed, 1 is open)
 #define LIGHT_SENSOR A2 // def a2
 #define TEMP_SENS A1 // def a1
@@ -22,7 +24,7 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 #define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
 #define DAWN 60 // this is the value at which the door starts opening (it is the same as dusk)
 #define DAY 600 // def 700, this is the value at which it is definitely day
-#define buff 80 // this is how long the dawn should last after sunrise, in minutes
+#define buff 90 // this is how long the window for dawn and sunset evaluation should be, in minutes
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
@@ -325,18 +327,20 @@ void setup() {
   // put your setup code here, to run once:
   digitalWrite(resetPin,HIGH);
   pinMode(resetPin,OUTPUT);
-  pinMode(10, OUTPUT);
-  digitalWrite(10, HIGH);
+  pinMode(additional_power, OUTPUT);
+  digitalWrite(additional_power, HIGH);
+  digitalWrite(adjust_time,HIGH);
   lcd.begin(16,2);
   if (! rtc.begin()) {
     while(true){
       ledBlink(50,50);
     }
   }
-  if (! rtc.isrunning()) {
+  if (! rtc.isrunning()){
     ledBlink(500,100);
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
+  //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   pinMode(LED_BUILTIN,OUTPUT);
   pinMode(REL_OP,OUTPUT);
   pinMode(REL_CL,OUTPUT);
@@ -427,9 +431,9 @@ void loop() {
     case dusk:
       printTimes(0,0,0, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
-      wait_minutes(waiting);
-      closeDoor();
       wait_minutes(1);
+      closeDoor();
+      //wait_minutes(1);
       digitalWrite(resetPin,LOW);
       // resetFunc();
       break;
