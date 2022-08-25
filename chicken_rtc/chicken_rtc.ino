@@ -253,7 +253,7 @@ int closeDoor(){
   while (true){
       delay(500);
       secs +=1;
-      if (digitalRead(CL_SENS) < 1 || secs > T_MOT*2 ){// check if door closed, or if too long
+      if (digitalRead(CL_SENS) < 1 || secs > T_MOT*6 ){// check if door closed, or if too long
         delay(500);
         digitalWrite(REL_RD,v_off);
         break;
