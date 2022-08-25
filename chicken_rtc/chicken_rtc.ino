@@ -6,19 +6,23 @@
 RTC_DS1307 rtc;// SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 
-#define REL_OP 4 //def 4 this is the command to open the door, on relay 3
-#define REL_CL 5 // def 5 this is the command to close the door, on relay 2
-#define REL_RD 8 // def 8 this is the switch to turn on the radio and the motion sensor light, on relay 4
+// I/O definition
 #define REL_LAMP 2 // def 2 this is the switch to turn on the heating lamp, on relay 1
 #define REL_BLINK 3 // the relay for the blinker
-#define adjust_time 7 // the pin to short when adjusting the time
-#define additional_power 10 // the pin to provide additional power
+#define REL_OP 4 //def 4 this is the command to open the door, on relay 3
+#define REL_CL 5 // def 5 this is the command to close the door, on relay 2
 #define CL_SENS 6 // def 6 the switch, that bridges ground to digital pin 6 to detect when it is closed (0 is closed, 1 is open)
-#define LIGHT_SENSOR A2 // def a2
-#define TEMP_SENS A1 // def a1
+#define adjust_time 7 // the pin to short when adjusting the time
+#define REL_RD 8 // def 8 this is the switch to turn on the radio and the motion sensor light, on relay 4
+#define OP_SENS 9 // def 9 this is the limit switch that bridges ground to digital pin 6 to detecto when it is the limit for open (1 is still opening, 0 is open)
+#define additional_power 10 // the pin to provide additional power
 #define resetPin 12 // reset pin for manual reset
-#define test_mode 0 // if in test mode, value is greater than 0
 
+#define TEMP_SENS A1 // def a1
+#define LIGHT_SENSOR A2 // def a2
+
+// operative parameters
+#define test_mode 0 // if in test mode, value is greater than 0
 // functon params
 #define sens 1 // def 1, this is the sensitivity for the hysteresis evaluation, which is the "noise" on the sensor, it has to be determined manually depending on the position of the sensor. try it a few times with the sensor_det code
 #define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
@@ -238,30 +242,31 @@ int checktime(){
   }
 }
 
-int openDoor(){
-  digitalWrite(REL_OP,v_on);
-  for (int i = 0; i<T_MOT; i++){
-    delay(second_1);
+int Door(char* state){
+  int SENS;
+  int REL;
+  if (state=="close"){
+    SENS = CL_SENS;
+    REL = REL_CL;
   }
-  digitalWrite(REL_OP,v_off);
-  delay(second_1/10);
-}
-
-int closeDoor(){
-  digitalWrite(REL_CL,v_on);
-  int secs = 0;
-  while (true){
-      delay(500);
-      secs +=1;
-      if (digitalRead(CL_SENS) < 1 || secs > T_MOT*6 ){// check if door closed, or if too long
+  else if (state=="open"){
+    SENS = OP_SENS;
+    REL = REL_OP;
+  }
+  if (digitalRead(SENS) > 0){
+      digitalWrite(REL,v_on);
+      while (true){
         delay(500);
-        digitalWrite(REL_RD,v_off);
-        break;
+        if (digitalRead(SENS) < 1){
+          digitalWrite(REL,v_off);
+          break;
+        }
+      }
     }
-  }
-  digitalWrite(REL_CL,v_off); // this is the automatic run
+  digitalWrite(REL,v_off);
   delay(second_1);
-}
+  }
+
 
 int wait_minutes(int mins){
   if (mins == 0){
@@ -348,6 +353,7 @@ void setup() {
   pinMode(REL_LAMP,OUTPUT);
   pinMode(REL_BLINK,OUTPUT);
   pinMode(CL_SENS,INPUT_PULLUP);
+  pinMode(OP_SENS,INPUT_PULLUP);
   if (inv_rel == 1){
     v_on = LOW;
     v_off = HIGH;
@@ -383,9 +389,7 @@ void loop() {
       TempLamp();
       nightBlink(80);
       digitalWrite(REL_RD, v_off);
-      if (digitalRead(CL_SENS) > 0){
-        closeDoor();
-      }
+      Door("close");
       break;
     case dawn:
       printTimes(0,0,0, now, lightval, tempval);
@@ -394,13 +398,11 @@ void loop() {
       digitalWrite(REL_RD, v_off);
       switch(count){
         case RPT:
-          openDoor();
+          Door("open");
           digitalWrite(REL_LAMP,v_off);
           break;
         case RPT+1:
-          if (digitalRead(CL_SENS) < 1){
-            openDoor();
-          }
+          Door("open");
           break;
         default:
           delay(second_1*5);
@@ -410,9 +412,7 @@ void loop() {
     case day_:
       printTimes(0,0,0, now, lightval, tempval);
       ledBlink(1500,1500);
-      if (digitalRead(CL_SENS) < 1 && day_ct > 0 && day_ct <= 10){
-        openDoor();
-      }
+      Door("open");
       wait_minutes(waiting);
       digitalWrite(REL_RD,v_off);
       break;
@@ -432,7 +432,9 @@ void loop() {
       printTimes(0,0,0, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
       wait_minutes(1);
-      closeDoor();
+      Door("close");
+      delay(1500);
+      digitalWrite(REL_RD,v_off);
       //wait_minutes(1);
       digitalWrite(resetPin,LOW);
       // resetFunc();
