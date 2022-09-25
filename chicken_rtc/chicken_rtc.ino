@@ -245,6 +245,7 @@ int checktime(){
 int Door(char* state){
   int SENS;
   int REL;
+  int cnt = 0;
   if (state=="close"){
     SENS = CL_SENS;
     REL = REL_CL;
@@ -256,9 +257,11 @@ int Door(char* state){
   if (digitalRead(SENS) > 0){
       digitalWrite(REL,v_on);
       while (true){
-        delay(500);
-        if (digitalRead(SENS) < 1){
+        cnt +=1;
+        delay(50);
+        if (digitalRead(SENS) < 1 || cnt > 800){
           digitalWrite(REL,v_off);
+          digitalWrite(REL_RD,v_off);
           break;
         }
       }
