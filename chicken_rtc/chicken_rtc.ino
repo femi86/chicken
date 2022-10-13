@@ -41,7 +41,7 @@ double lat {47.3739}; // your latitude
 double lon  {8.5451}; // your longitude
 int tz {2}; // your timezone vs UTC.
 int spring {86}; // the day number when daylight saving comes in this year (2022)
-int fall {304}; // the day number when daylight saving goes away this year (2022)int v_on;
+int fall {304}; // the day number when daylight saving goes away this year (2022)
 int v_off;
 int v_on;
 
@@ -109,7 +109,7 @@ int sun_time(double LAT, double LON, int TZ, DateTime now){
     int day_y = now.unixtime() / 86400L;
     int day_t = check_date(now);
     if (day_t < spring || day_t > fall){
-      TZ = 1;
+      TZ = TZ - 1;
     }
     double j_day = double(day_y) + 25569.0 + 2415018.5 + (now.hour()/24.0 + now.minute()/1440.0) - double(TZ)/24.0; // the 25569 is the time in days between excel's 0 and unix 
     double j_cen = (j_day - 2451545)/36525; //2451545)/36525
@@ -188,12 +188,12 @@ int checktime(){
   int light_val = averageLight(INTEG, average_time);
   int tm_mins = (now.hour()*60)+now.minute();
   
-  if ((tm_mins > (sset+buff)) || (tm_mins < (srise - buff))){
+  if ((tm_mins > (sset+buff)) || (tm_mins < srise - buff)){
     Serial.println("night code");
     day_ct = 0;
     return night;
   }
-  else if ((tm_mins >= (srise - buff)) && (tm_mins <= (srise + buff))){
+  else if ((tm_mins >= srise - buff) && (tm_mins <= (srise + buff))){
     if (light_val > DAWN){
       Serial.println("Dawn code");
       if (count = RPT){
@@ -344,6 +344,7 @@ void setup() {
       ledBlink(50,50);
     }
   }
+  //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   if (! rtc.isrunning()){
     ledBlink(500,100);
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -374,9 +375,9 @@ void setup() {
   sun_time(lat,lon,tz,now);
 }
 void loop() {
-  int lightval = averageLight(5,100);
+  int lightval = averageLight(5,50);
   DateTime now = rtc.now();
-  int tempval = averageTemp(5,100); 
+  int tempval = averageTemp(5,50); 
   int check = checktime();
   if (test_mode > 0){
     int INTEG = 1; // def 10, how many iterations for the sensor averaging
@@ -408,14 +409,16 @@ void loop() {
           Door("open");
           break;
         default:
-          delay(second_1*5);
+          delay(second_1*15);
           break;
       }
       break;
     case day_:
       printTimes(0,0,0, now, lightval, tempval);
       ledBlink(1500,1500);
-      Door("open");
+      if (lightval > DAWN);{
+        Door("open");  
+      }
       wait_minutes(waiting);
       digitalWrite(REL_RD,v_off);
       break;
