@@ -309,9 +309,9 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.clear();
       delay(500);
       lcd.setCursor(0,0);
-      String string = String(now.hour())+ ":" + now.minute()+",";
+      String string = String(now.hour())+ ":" + now.minute();
       lcd.print(string);
-      lcd.setCursor(5,0);
+      lcd.setCursor(4,0);
       String string2 = String("L") + lightval;
       lcd.print(string2);
       lcd.setCursor(10,0);
@@ -333,6 +333,7 @@ void(* resetFunc) (void) = 0; //declare reset function at address 0, to reset th
 
 void setup() {
   // put your setup code here, to run once:
+  //Serial.begin(9600);
   digitalWrite(resetPin,HIGH);
   pinMode(resetPin,OUTPUT);
   pinMode(additional_power, OUTPUT);
@@ -379,6 +380,8 @@ void loop() {
   DateTime now = rtc.now();
   int tempval = averageTemp(5,50); 
   int check = checktime();
+  //Serial.println(tempval);
+  //Serial.println(now);
   if (test_mode > 0){
     int INTEG = 1; // def 10, how many iterations for the sensor averaging
     const int RPT = 2; // def 15, how many measurements before deciding it is indeed dawn (to exit the first loop)
