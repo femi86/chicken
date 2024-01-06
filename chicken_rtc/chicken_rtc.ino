@@ -32,7 +32,7 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
-#define T_MOT 45 // def 27, the time it takes the motor to close in seconds
+#define T_MOT 60 // def 27, the time it takes the motor to close in seconds
 #define second_1 1000 // def 1000, one second, can be shortened for debug 
 
 // location params
