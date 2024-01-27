@@ -32,7 +32,7 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
-#define T_MOT 60 // def 27, the time it takes the motor to close in seconds
+#define T_MOT 120 // def 27, the time it takes the motor to close in seconds
 #define second_1 1000 // def 1000, one second, can be shortened for debug 
 
 // location params
@@ -242,7 +242,7 @@ int checktime(){
   }
 }
 
-int Door(char* state){
+int Door(const char* state){
   int SENS;
   int REL;
   int cnt = 0;
@@ -259,7 +259,7 @@ int Door(char* state){
       while (true){
         cnt +=1;
         delay(50);
-        if (digitalRead(SENS) < 1 || cnt > 800){
+        if (digitalRead(SENS) < 1 || cnt > (T_MOT*20)){
           digitalWrite(REL,v_off);
           digitalWrite(REL_RD,v_off);
           break;
@@ -297,10 +297,10 @@ int ledBlink(int SEC_ON, int SEC_OFF){
 int nightBlink(int duration){
   digitalWrite(REL_BLINK,v_on);
   for (int i = 0; i < duration; i++){
-    delay(second_1);
+    delay(second_1*2);
   }
   digitalWrite(REL_BLINK,v_off);
-  delay(second_1*5);
+  delay(second_1*4);
 }
 
 void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
@@ -311,7 +311,7 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.setCursor(0,0);
       String string = String(now.hour())+ ":" + now.minute();
       lcd.print(string);
-      lcd.setCursor(4,0);
+      lcd.setCursor(5,0);
       String string2 = String("L") + lightval;
       lcd.print(string2);
       lcd.setCursor(10,0);
@@ -345,7 +345,6 @@ void setup() {
       ledBlink(50,50);
     }
   }
-  //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   if (! rtc.isrunning()){
     ledBlink(500,100);
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -394,7 +393,7 @@ void loop() {
       printTimes(0,0,0, now, lightval, tempval);
       ledBlink(300,1500);
       TempLamp();
-      nightBlink(80);
+      nightBlink(40);
       digitalWrite(REL_RD, v_off);
       Door("close");
       break;
