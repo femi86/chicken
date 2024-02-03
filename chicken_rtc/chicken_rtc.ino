@@ -390,7 +390,7 @@ void loop() {
   }
   switch(check){
     case night:
-      printTimes(0,0,0, now, lightval, tempval);
+      printTimes(0,0,139, now, lightval, tempval);
       ledBlink(300,1500);
       TempLamp();
       nightBlink(40);
@@ -398,7 +398,7 @@ void loop() {
       Door("close");
       break;
     case dawn:
-      printTimes(0,0,0, now, lightval, tempval);
+      printTimes(255,192,203, now, lightval, tempval);
       ledBlink(300,300);
       nightBlink(10);
       digitalWrite(REL_RD, v_off);
@@ -416,7 +416,7 @@ void loop() {
       }
       break;
     case day_:
-      printTimes(0,0,0, now, lightval, tempval);
+      printTimes(255,255,0, now, lightval, tempval);
       ledBlink(1500,1500);
       if (lightval > DAWN);{
         Door("open");  
@@ -425,7 +425,7 @@ void loop() {
       digitalWrite(REL_RD,v_off);
       break;
     case sundown:
-      printTimes(0,0,0, now, lightval, tempval);
+      printTimes(160,32,240, now, lightval, tempval);
       ledBlink(600,300);
       if (digitalRead(CL_SENS) > 0){
         digitalWrite(REL_RD,v_on);  
@@ -437,7 +437,7 @@ void loop() {
       delay(second_1);
       break;
     case dusk:
-      printTimes(0,0,0, now, lightval, tempval);
+      printTimes(0,0,255, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
       wait_minutes(1);
       Door("close");
