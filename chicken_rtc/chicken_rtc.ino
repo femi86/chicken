@@ -2,6 +2,7 @@
 #include "math.h"
 #include "Wire.h"
 #include "rgb_lcd.h"
+#include <stdio.h>
 
 RTC_DS1307 rtc;// SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
@@ -259,7 +260,7 @@ int Door(const char* state){
       while (true){
         cnt +=1;
         delay(50);
-        if (digitalRead(SENS) < 1 || cnt > (T_MOT*20)){
+        if (digitalRead(SENS) < 1 || cnt > (T_MOT*10)){
           digitalWrite(REL,v_off);
           digitalWrite(REL_RD,v_off);
           break;
@@ -309,23 +310,31 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.clear();
       delay(500);
       lcd.setCursor(0,0);
-      String string = String(now.hour())+ ":" + now.minute();
-      lcd.print(string);
-      lcd.setCursor(5,0);
-      String string2 = String("L") + lightval;
-      lcd.print(string2);
-      lcd.setCursor(10,0);
-      String string3 = String("D") + digitalRead(CL_SENS);
-      lcd.print(string3);
-      lcd.setCursor(12,0);
-      String string4 = String("T") + tempval;               
-      lcd.print(string4);
+      char buff1[14];
+      char buff2[14];
+      snprintf (buff1, sizeof(buff1), "%02d:%02dL%03dD%dT%02",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval);
+      snprintf (buff2, sizeof(buff2), "SR%02d:%02dSD%02d%02d",srise/60,srise%60,sset/60,sset%60);
+      lcd.setCursor(0,0);
+      lcd.print(buff1);
       lcd.setCursor(0,1);
-      String string5 = String("SR") + srise/60 + ":" + srise%60;
-      lcd.print(string5);
-      lcd.setCursor(7,1); 
-      String string6 = String("SD") + sset/60 + ":" + sset%60;
-      lcd.print(string6);
+      lcd.print(buff2);
+//      String string = now.hour()+ ":" + now.minute();
+//      lcd.print(string);
+//      lcd.setCursor(6,0);
+//      String string2 = String("L") + lightval;
+//      lcd.print(string2);
+//      lcd.setCursor(10,0);
+//      String string3 = String("D") + digitalRead(CL_SENS);
+//      lcd.print(string3);
+//      lcd.setCursor(12,0);
+//      String string4 = String("T") + tempval;               
+//      lcd.print(string4);
+//      lcd.setCursor(0,1);
+//      String string5 = String("SR") + srise/60 + ":" + srise%60;
+//      lcd.print(string5);
+//      lcd.setCursor(7,1); 
+//      String string6 = String("SD") + sset/60 + ":" + sset%60;
+//      lcd.print(string6);
       lcd.home();
 }
 
@@ -390,7 +399,7 @@ void loop() {
   }
   switch(check){
     case night:
-      printTimes(0,0,139, now, lightval, tempval);
+      printTimes(0,0,0, now, lightval, tempval);
       ledBlink(300,1500);
       TempLamp();
       nightBlink(40);
@@ -437,7 +446,7 @@ void loop() {
       delay(second_1);
       break;
     case dusk:
-      printTimes(0,0,255, now, lightval, tempval);
+      printTimes(0,0,139, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
       wait_minutes(1);
       Door("close");
