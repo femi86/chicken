@@ -310,10 +310,11 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.clear();
       delay(500);
       lcd.setCursor(0,0);
-      char buff1[14];
-      char buff2[14];
-      snprintf (buff1, sizeof(buff1), "%02d:%02dL%03dD%dT%02",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval);
-      snprintf (buff2, sizeof(buff2), "SR%02d:%02dSD%02d%02d",srise/60,srise%60,sset/60,sset%60);
+      char buff1[16];
+      char buff2[16];
+      snprintf (buff1, sizeof(buff1), "%02d:%02d L%03dD%dT%02d",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval);
+      snprintf (buff2, sizeof(buff2), "SR%02d:%02d 
+      SD%02d:%02d",srise/60,srise%60,sset/60,sset%60);
       lcd.setCursor(0,0);
       lcd.print(buff1);
       lcd.setCursor(0,1);
