@@ -27,9 +27,9 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 // functon params
 #define sens 1 // def 1, this is the sensitivity for the hysteresis evaluation, which is the "noise" on the sensor, it has to be determined manually depending on the position of the sensor. try it a few times with the sensor_det code
 #define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
-#define DAWN 60 // this is the value at which the door starts opening (it is the same as dusk)
+#define DAWN 90 // this is the value at which the door starts opening (it is the same as dusk)
 #define DAY 600 // def 700, this is the value at which it is definitely day
-#define buff 90 // this is how long the window for dawn and sunset evaluation should be, in minutes
+#define buff 120 // this is how long the window for dawn and sunset evaluation should be, in minutes
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
@@ -190,13 +190,11 @@ int checktime(){
   int tm_mins = (now.hour()*60)+now.minute();
   
   if ((tm_mins > (sset+buff)) || (tm_mins < srise - buff)){
-    Serial.println("night code");
     day_ct = 0;
     return night;
   }
   else if ((tm_mins >= srise - buff) && (tm_mins <= (srise + buff))){
     if (light_val > DAWN){
-      Serial.println("Dawn code");
       if (count = RPT){
         count = RPT + 1;
       }
@@ -207,38 +205,32 @@ int checktime(){
       return dawn;
     }
     else {
-      Serial.println("Dawn code, night case");
       count = 0;
       day_ct = 0;
       return night;
     }
   }
   else if ((tm_mins > (srise + buff)) && (tm_mins < (sset - buff))){
-    Serial.println("Day code");
     day_ct += 1;
     return day_;
   }
   else if (tm_mins >= (sset - buff)){
     if (light_val > DAWN){
-      Serial.println("sundown code");
       day_ct = 0;
       return sundown;
     }
     else {
       if (digitalRead(CL_SENS) > 0){
-        Serial.println("dusk code");
         day_ct = 0;
         return dusk;
       }
       else {
-        Serial.println("dusk code, night case");
         day_ct = 0;
         return night;
       }
     }
   }
   else {
-    Serial.println("between cases");
     return between_states;
   }
 }
@@ -313,29 +305,14 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       char buff1[16];
       char buff2[16];
       snprintf (buff1, sizeof(buff1), "%02d:%02d L%03dD%dT%02d",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval);
-      snprintf (buff2, sizeof(buff2), "SR%02d:%02d 
-      SD%02d:%02d",srise/60,srise%60,sset/60,sset%60);
+      snprintf (buff2, sizeof(buff2), "SR%02d:%02dSD%02d:%02d",srise/60,srise%60,sset/60,sset%60);
       lcd.setCursor(0,0);
       lcd.print(buff1);
       lcd.setCursor(0,1);
       lcd.print(buff2);
-//      String string = now.hour()+ ":" + now.minute();
-//      lcd.print(string);
-//      lcd.setCursor(6,0);
-//      String string2 = String("L") + lightval;
-//      lcd.print(string2);
-//      lcd.setCursor(10,0);
-//      String string3 = String("D") + digitalRead(CL_SENS);
-//      lcd.print(string3);
-//      lcd.setCursor(12,0);
-//      String string4 = String("T") + tempval;               
-//      lcd.print(string4);
-//      lcd.setCursor(0,1);
-//      String string5 = String("SR") + srise/60 + ":" + srise%60;
-//      lcd.print(string5);
-//      lcd.setCursor(7,1); 
-//      String string6 = String("SD") + sset/60 + ":" + sset%60;
-//      lcd.print(string6);
+      char buffer[114];
+      sprintf (buffer, "It is %02d:%02d, light value is %03d, the door is %d, the temperature is %02d°C, Sunrise is at %02d:%02d and sundown at %02d:%02d.",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval,srise/60,srise%60,sset/60,sset%60);
+      Serial.println(buffer);
       lcd.home();
 }
 
@@ -343,7 +320,7 @@ void(* resetFunc) (void) = 0; //declare reset function at address 0, to reset th
 
 void setup() {
   // put your setup code here, to run once:
-  //Serial.begin(9600);
+  Serial.begin(9600);
   digitalWrite(resetPin,HIGH);
   pinMode(resetPin,OUTPUT);
   pinMode(additional_power, OUTPUT);
@@ -392,14 +369,15 @@ void loop() {
   //Serial.println(tempval);
   //Serial.println(now);
   if (test_mode > 0){
-    int INTEG = 1; // def 10, how many iterations for the sensor averaging
+    int INTEG = 5; // def 10, how many iterations for the sensor averaging
     const int RPT = 2; // def 15, how many measurements before deciding it is indeed dawn (to exit the first loop)
-    int average_time = 50;
-    int average_hyst = 1;
-    int waiting = 0;
+    int average_time = 100;
+    int average_hyst = 2;
+    int waiting = 1;
   }
   switch(check){
     case night:
+      Serial.println("Arduino mode Night");
       printTimes(0,0,0, now, lightval, tempval);
       ledBlink(300,1500);
       TempLamp();
@@ -408,6 +386,7 @@ void loop() {
       Door("close");
       break;
     case dawn:
+      Serial.println("Arduino mode Dawn");
       printTimes(255,192,203, now, lightval, tempval);
       ledBlink(300,300);
       nightBlink(10);
@@ -426,6 +405,7 @@ void loop() {
       }
       break;
     case day_:
+      Serial.println("Arduino mode Day");
       printTimes(255,255,0, now, lightval, tempval);
       ledBlink(1500,1500);
       if (lightval > DAWN);{
@@ -435,6 +415,7 @@ void loop() {
       digitalWrite(REL_RD,v_off);
       break;
     case sundown:
+      Serial.println("Arduino mode Sundown");
       printTimes(160,32,240, now, lightval, tempval);
       ledBlink(600,300);
       if (digitalRead(CL_SENS) > 0){
@@ -447,6 +428,7 @@ void loop() {
       delay(second_1);
       break;
     case dusk:
+      Serial.println("Arduino mode Dusk");
       printTimes(0,0,139, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
       wait_minutes(1);
@@ -458,7 +440,7 @@ void loop() {
       // resetFunc();
       break;
     case between_states:
-      Serial.println("interstate executions");  
+      Serial.println("Arduino mode interstates");  
       ledBlink(100,100);
       wait_minutes(1);
   }
