@@ -27,13 +27,13 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 // functon params
 #define sens 1 // def 1, this is the sensitivity for the hysteresis evaluation, which is the "noise" on the sensor, it has to be determined manually depending on the position of the sensor. try it a few times with the sensor_det code
 #define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
-#define DAWN 90 // this is the value at which the door starts opening (it is the same as dusk)
+#define DAWN 80// this is the value at which the door starts opening (it is the same as dusk)
 #define DAY 600 // def 700, this is the value at which it is definitely day
 #define buff 120 // this is how long the window for dawn and sunset evaluation should be, in minutes
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
-#define T_MOT 120 // def 27, the time it takes the motor to close in seconds
+#define T_MOT 20// def 27, the time it takes the motor to close in seconds
 #define second_1 1000 // def 1000, one second, can be shortened for debug 
 
 // location params
@@ -149,9 +149,13 @@ int averageTemp(int integ, int average_t){
     tmp += analogRead(TEMP_SENS);
     delay(average_t);
   }
-  float R = 1023.0/(tmp/integ)-1.0;
+  int a = tmp/integ;
+  float R = 1023.0/a-1.0;
   R = 100000*R;
+  int B = 3975;
   float temp = 1.0/(log(R/100000)/4299+1/298.15)-273.15;
+  //float R = (1023-a)*10000/a;
+  //float temp = 1/(log(R/10000)/B+1/298.15)-273.15;
   return temp;
 }
 
@@ -220,7 +224,7 @@ int checktime(){
       return sundown;
     }
     else {
-      if (digitalRead(CL_SENS) > 0){
+      if (digitalRead(CL_SENS) == 1){
         day_ct = 0;
         return dusk;
       }
@@ -238,21 +242,27 @@ int checktime(){
 int Door(const char* state){
   int SENS;
   int REL;
+  int FREE;
+  int END;
   int cnt = 0;
   if (state=="close"){
     SENS = CL_SENS;
     REL = REL_CL;
+    FREE = 1;
+    END = 0;
   }
   else if (state=="open"){
     SENS = OP_SENS;
     REL = REL_OP;
+    FREE = 0;
+    END = 1;
   }
-  if (digitalRead(SENS) > 0){
+  if (digitalRead(SENS) == FREE){
       digitalWrite(REL,v_on);
       while (true){
         cnt +=1;
         delay(50);
-        if (digitalRead(SENS) < 1 || cnt > (T_MOT*10)){
+        if (digitalRead(SENS) == END || cnt > (T_MOT*10)){
           digitalWrite(REL,v_off);
           digitalWrite(REL_RD,v_off);
           break;
@@ -262,7 +272,6 @@ int Door(const char* state){
   digitalWrite(REL,v_off);
   delay(second_1);
   }
-
 
 int wait_minutes(int mins){
   if (mins == 0){
@@ -296,7 +305,31 @@ int nightBlink(int duration){
   delay(second_1*4);
 }
 
-void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
+int doorState(){
+  int door_status;
+  // check if closed
+  if (digitalRead(CL_SENS) == 0){
+    if (digitalRead(OP_SENS) == 0){
+      door_status = 0;
+    }
+    else{
+      door_status = 2;
+    }
+  }
+  // check if open
+  else{
+    if (digitalRead(OP_SENS) == 1){
+      door_status = 1;
+    }
+    else{
+      door_status = 2;
+    }
+  }
+  return door_status;
+}
+
+void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){	
+      int doorStatus = doorState();
       lcd.setRGB(r,g,b);
       delay(1000);
       lcd.clear();
@@ -304,15 +337,18 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.setCursor(0,0);
       char buff1[16];
       char buff2[16];
-      snprintf (buff1, sizeof(buff1), "%02d:%02d L%03dD%dT%02d",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval);
+      snprintf (buff1, sizeof(buff1), "%02d:%02d L%03dD%dT%02d",now.hour(),now.minute(),lightval,doorStatus,tempval);
       snprintf (buff2, sizeof(buff2), "SR%02d:%02dSD%02d:%02d",srise/60,srise%60,sset/60,sset%60);
       lcd.setCursor(0,0);
       lcd.print(buff1);
       lcd.setCursor(0,1);
       lcd.print(buff2);
-      char buffer[114];
-      sprintf (buffer, "It is %02d:%02d, light value is %03d, the door is %d, the temperature is %02d°C, Sunrise is at %02d:%02d and sundown at %02d:%02d.",now.hour(),now.minute(),lightval,digitalRead(CL_SENS),tempval,srise/60,srise%60,sset/60,sset%60);
-      Serial.println(buffer);
+      char buffer1[57];
+      sprintf (buffer1, "it is now %02d:%02d, sunrise is at %02d:%02d and sundown at %02d:%02d",now.hour(),now.minute(),srise/60,srise%60,sset/60,sset%60);
+      Serial.println(buffer1);
+      char buffer2[59];
+      sprintf (buffer2, "light value is %03d, the door is %d, the temperature is %+02d°C",lightval,doorStatus,tempval);
+      Serial.println(buffer2);
       lcd.home();
 }
 
@@ -344,7 +380,7 @@ void setup() {
   pinMode(REL_LAMP,OUTPUT);
   pinMode(REL_BLINK,OUTPUT);
   pinMode(CL_SENS,INPUT_PULLUP);
-  pinMode(OP_SENS,INPUT_PULLUP);
+  pinMode(OP_SENS,INPUT);
   if (inv_rel == 1){
     v_on = LOW;
     v_off = HIGH;
@@ -364,7 +400,7 @@ void setup() {
 void loop() {
   int lightval = averageLight(5,50);
   DateTime now = rtc.now();
-  int tempval = averageTemp(5,50); 
+  int tempval = averageTemp(5,150); 
   int check = checktime();
   //Serial.println(tempval);
   //Serial.println(now);
@@ -418,7 +454,7 @@ void loop() {
       Serial.println("Arduino mode Sundown");
       printTimes(160,32,240, now, lightval, tempval);
       ledBlink(600,300);
-      if (digitalRead(CL_SENS) > 0){
+      if (digitalRead(CL_SENS) == 1){
         digitalWrite(REL_RD,v_on);  
       }
       else {
@@ -431,9 +467,10 @@ void loop() {
       Serial.println("Arduino mode Dusk");
       printTimes(0,0,139, now, lightval, tempval);
       digitalWrite(REL_BLINK,v_on);
-      wait_minutes(1);
+      //wait_minutes(1);
+      delay(second_1);
       Door("close");
-      delay(1500);
+      delay(second_1);
       digitalWrite(REL_RD,v_off);
       //wait_minutes(1);
       digitalWrite(resetPin,LOW);
