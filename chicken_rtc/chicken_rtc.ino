@@ -400,7 +400,7 @@ void setup() {
 void loop() {
   int lightval = averageLight(5,50);
   DateTime now = rtc.now();
-  int tempval = averageTemp(5,150); 
+  int tempval = averageTemp(5,500); 
   int check = checktime();
   //Serial.println(tempval);
   //Serial.println(now);
