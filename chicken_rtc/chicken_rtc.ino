@@ -317,7 +317,7 @@ int doorState(){
     }
   }
   // check if open
-  else{
+  else if (digitalRead(CL_SENS) == 1){
     if (digitalRead(OP_SENS) == 1){
       door_status = 1;
     }
@@ -343,11 +343,13 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.print(buff1);
       lcd.setCursor(0,1);
       lcd.print(buff2);
+      delay(500);
       char buffer1[57];
       sprintf (buffer1, "it is now %02d:%02d, sunrise is at %02d:%02d and sundown at %02d:%02d",now.hour(),now.minute(),srise/60,srise%60,sset/60,sset%60);
       Serial.println(buffer1);
-      char buffer2[59];
-      sprintf (buffer2, "light value is %03d, the door is %d, the temperature is %+02d°C",lightval,doorStatus,tempval);
+      delay(500);
+      char buffer2[61];
+      sprintf (buffer2, "light value is %03d, the door is %d, the temperature is %+02.1f°C",lightval,doorStatus,tempval);
       Serial.println(buffer2);
       lcd.home();
 }
