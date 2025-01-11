@@ -29,13 +29,14 @@ rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
 #define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
 #define DAWN 80// this is the value at which the door starts opening (it is the same as dusk)
 #define DAY 600 // def 700, this is the value at which it is definitely day
-#define buff 120 // this is how long the window for dawn and sunset evaluation should be, in minutes
+#define buff 120// this is how long the window for dawn and sunset evaluation should be, in minutes
 
 // relay params
 #define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
 #define T_MOT 20// def 27, the time it takes the motor to close in seconds
 #define second_1 1000 // def 1000, one second, can be shortened for debug 
 
+int lampState = 0;
 // location params
 
 double lat {47.3739}; // your latitude
@@ -48,7 +49,7 @@ int v_on;
 
 // script speed params
 int INTEG {15}; // def 15, how many iterations for the sensor averaging
-const int RPT {15}; // def 15, how many measurements before deciding it is indeed dawn (to exit the first loop)
+const int RPT {5}; // def 15, how many measurements before deciding it is indeed dawn (to exit the first loop)
 int average_time {500}; // def 500, this defines how fast the sensor integrates, in ms
 int waiting {2}; // time to wait within a state
 
@@ -156,7 +157,8 @@ int averageTemp(int integ, int average_t){
   float temp = 1.0/(log(R/100000)/4299+1/298.15)-273.15;
   //float R = (1023-a)*10000/a;
   //float temp = 1/(log(R/10000)/B+1/298.15)-273.15;
-  return temp;
+  int tempInt =(int)round(temp);
+  return tempInt;
 }
 
 int averageLight(int integ, int average_t){
@@ -179,10 +181,12 @@ int TempLamp(){
   if (averageTemp(INTEG, average_time) <= criticalT){
     digitalWrite(REL_LAMP,v_on);
     delay(second_1);
+    lampState = 1;
   }
   else {
     digitalWrite(REL_LAMP,v_off);
     delay(second_1);
+    lampState = 0;
   }
 }
 
@@ -250,27 +254,21 @@ int Door(const char* state){
     REL = REL_CL;
     FREE = 1;
     END = 0;
-  }
+    }
   else if (state=="open"){
     SENS = OP_SENS;
     REL = REL_OP;
     FREE = 0;
     END = 1;
-  }
-  if (digitalRead(SENS) == FREE){
-      digitalWrite(REL,v_on);
-      while (true){
-        cnt +=1;
-        delay(50);
-        if (digitalRead(SENS) == END || cnt > (T_MOT*10)){
-          digitalWrite(REL,v_off);
-          digitalWrite(REL_RD,v_off);
-          break;
-        }
-      }
     }
-  digitalWrite(REL,v_off);
-  delay(second_1);
+  if (digitalRead(SENS) == FREE){
+      while (digitalRead(SENS != END){
+        digitalWrite(REL,v_on);
+	delay(50);
+      }
+      digitalWrite(REL,v_off);
+      delay(second_1);
+    }
   }
 
 int wait_minutes(int mins){
@@ -312,24 +310,18 @@ int doorState(){
     if (digitalRead(OP_SENS) == 0){
       door_status = 0;
     }
-    else{
-      door_status = 2;
-    }
   }
   // check if open
   else if (digitalRead(CL_SENS) == 1){
     if (digitalRead(OP_SENS) == 1){
       door_status = 1;
     }
-    else{
-      door_status = 2;
-    }
   }
   return door_status;
 }
 
 void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){	
-      int doorStatus = doorState();
+      int doorStatus = digitalRead(CL_SENS);
       lcd.setRGB(r,g,b);
       delay(1000);
       lcd.clear();
@@ -343,13 +335,13 @@ void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){
       lcd.print(buff1);
       lcd.setCursor(0,1);
       lcd.print(buff2);
-      delay(500);
       char buffer1[57];
       sprintf (buffer1, "it is now %02d:%02d, sunrise is at %02d:%02d and sundown at %02d:%02d",now.hour(),now.minute(),srise/60,srise%60,sset/60,sset%60);
-      Serial.println(buffer1);
       delay(500);
-      char buffer2[61];
-      sprintf (buffer2, "light value is %03d, the door is %d, the temperature is %+02.1f°C",lightval,doorStatus,tempval);
+      Serial.println(buffer1);
+      char buffer2[59];
+      sprintf (buffer2, "light value is %03d, the door is %d, the temperature is %+02d C, lamp is %d",lightval,doorStatus,tempval,lampState);
+      delay(500);
       Serial.println(buffer2);
       lcd.home();
 }
