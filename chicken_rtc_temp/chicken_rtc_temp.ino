@@ -1,0 +1,187 @@
+#include <RTClib.h>
+#include "math.h"
+#include "Wire.h"
+#include "rgb_lcd.h"
+#include <stdio.h>
+#include "DHT.h"
+
+RTC_DS1307 rtc;// SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
+rgb_lcd lcd; // SDA is connecteed to A4, SCL to A5, power to A3, gnd to gnd
+
+// I/O definition
+#define REL_LAMP 2 // def 2 this is the switch to turn on the heating lamp, on relay 1
+#define REL_BLINK 3 // the relay for the blinker
+#define REL_OP 4 //def 4 this is the command to open the door, on relay 3
+#define REL_CL 5 // def 5 this is the command to close the door, on relay 2
+#define CL_SENS 6 // def 6 the switch, that bridges ground to digital pin 6 to detect when it is closed (0 is closed, 1 is open)
+#define adjust_time 7 // the pin to short when adjusting the time
+#define REL_RD 8 // def 8 this is the switch to turn on the radio and the motion sensor light, on relay 4
+#define OP_SENS 9 // def 9 this is the limit switch that bridges ground to digital pin 6 to detecto when it is the limit for open (1 is still opening, 0 is open)
+#define DHTPIN 10 // the pin to provide additional power
+#define resetPin 12 // reset pin for manual reset
+
+#define TEMP_SENS A1 // def a1
+#define LIGHT_SENSOR A2 // def a2
+
+// operative parameters
+#define test_mode 0 // if in test mode, value is greater than 0
+// functon params
+#define sens 1 // def 1, this is the sensitivity for the hysteresis evaluation, which is the "noise" on the sensor, it has to be determined manually depending on the position of the sensor. try it a few times with the sensor_det code
+#define criticalT 2 // def 2, the critical temperature (in °C) below which the lamp is turned on
+#define DAWN 80// this is the value at which the door starts opening (it is the same as dusk)
+#define DAY 600 // def 700, this is the value at which it is definitely day
+#define buff 120 // this is how long the window for dawn and sunset evaluation should be, in minutes
+
+// relay params
+#define inv_rel 1 // def 1, if the relay is turned on with ground, otherwise 0
+#define T_MOT 20// def 27, the time it takes the motor to close in seconds
+#define second_1 1000 // def 1000, one second, can be shortened for debug 
+
+// location params
+
+double lat {47.3739}; // your latitude
+double lon  {8.5451}; // your longitude
+int tz {2}; // your timezone vs UTC.
+int spring {86}; // the day number when daylight saving comes in this year (2022)
+int fall {304}; // the day number when daylight saving goes away this year (2022)
+int v_off;
+int v_on;
+
+// script speed params
+int INTEG {15}; // def 15, how many iterations for the sensor averaging
+const int RPT {15}; // def 15, how many measurements before deciding it is indeed dawn (to exit the first loop)
+int average_time {500}; // def 500, this defines how fast the sensor integrates, in ms
+int waiting {2}; // time to wait within a state
+
+// init the variables used in  script
+int count {0};
+int day_ct {0};
+
+const double rad {57296}; // denominator for radians
+const double deg {57296}; // numerator for degree
+int srise {0};
+int sset {0};
+
+// function definition, mathematical
+
+int averageTemp(int integ, int average_t){
+  int tmp = 0;
+  for (int i = 1; i<=integ; i++){
+    tmp += analogRead(TEMP_SENS);
+    delay(average_t);
+  }
+  int a = tmp/integ;
+  float R = 1023.0/a-1.0;
+  R = 100000*R;
+  int B = 3975;
+  float temp = 1.0/(log(R/100000)/4299+1/298.15)-273.15;
+  //float R = (1023-a)*10000/a;
+  //float temp = 1/(log(R/10000)/B+1/298.15)-273.15;
+  return temp;
+} 
+
+DHT dht(DHTPIN,DHT22);
+
+float readTemperatureDHT22() {
+  float tempC = dht.readTemperature();
+  if (isnan(tempC)) {
+    Serial.println("DH22 failed reading");
+    }
+  return tempC;
+}
+
+
+
+
+void Door(const char* state){
+  int SENS, REL;
+  int consRead = 0;
+  int FREE = 0;
+  int END = 1;
+  if (state=="close") {
+    SENS = CL_SENS;
+    REL  = REL_CL;
+  } 
+  else if (state=="open"){
+    SENS = OP_SENS;
+    REL  = REL_OP;
+  }
+  digitalWrite(REL, v_on);
+    while (true) {
+      digitalWrite(REL, v_on);
+      Serial.print("open sensor is: ");
+      Serial.print(digitalRead(OP_SENS));
+      Serial.print(", close sensor is: ");
+      Serial.print(digitalRead(CL_SENS));
+      Serial.println(" ");
+      delay(50);
+      if (digitalRead(SENS) == END){
+        consRead++;
+      }else{
+        consRead = 0;
+      }
+      if (consRead >= 3){
+        break;
+        }
+    }
+  digitalWrite(REL, v_off);
+  Serial.println("out of loop");
+  Serial.print("open sensor is: ");
+  Serial.print(digitalRead(OP_SENS));
+  Serial.print(", close sensor is: ");
+  Serial.print(digitalRead(CL_SENS));
+  Serial.println(" ");
+  }
+
+
+  
+
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  dht.begin();
+  digitalWrite(resetPin,HIGH);
+  pinMode(resetPin,OUTPUT);
+  digitalWrite(adjust_time,HIGH);
+  lcd.begin(16,2);
+  //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  pinMode(LED_BUILTIN,OUTPUT);
+  pinMode(REL_OP,OUTPUT);
+  pinMode(REL_CL,OUTPUT);
+  pinMode(REL_RD,OUTPUT);
+  pinMode(REL_LAMP,OUTPUT);
+  pinMode(REL_BLINK,OUTPUT);
+  pinMode(CL_SENS,INPUT_PULLUP);
+  pinMode(OP_SENS,INPUT_PULLUP);
+  if (inv_rel == 1){
+    v_on = LOW;
+    v_off = HIGH;
+  }
+  else{
+    v_on = HIGH;
+    v_off = LOW;
+  }
+  digitalWrite(REL_OP,v_off);
+  digitalWrite(REL_CL,v_off);
+  digitalWrite(REL_LAMP,v_off);
+  digitalWrite(REL_RD,v_off);
+  digitalWrite(REL_BLINK,v_off);
+}
+void loop() {
+  
+  //Serial.println(tempval);
+  //Serial.println(now);
+  //Door("close");
+  //delay(120*second_1);
+  //Door("open");
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  delay(3000);
+  Serial.print("humidity is ");
+  Serial.print(h);
+  Serial.print("%, temperature is ");
+  Serial.print(readTemperatureDHT22());
+  Serial.print("C \n");
+  delay(5000);
+  }

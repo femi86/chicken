@@ -203,7 +203,7 @@ int checktime(){
   }
   else if ((tm_mins >= srise - buff) && (tm_mins <= (srise + buff))){
     if (light_val > DAWN){
-      if (count = RPT){
+      if (count == RPT){
         count = RPT + 1;
       }
       else {
@@ -262,7 +262,7 @@ int Door(const char* state){
     END = 1;
     }
   if (digitalRead(SENS) == FREE){
-      while (digitalRead(SENS != END){
+      while (digitalRead(SENS != END)){
         digitalWrite(REL,v_on);
 	delay(50);
       }
@@ -307,21 +307,17 @@ int doorState(){
   int door_status;
   // check if closed
   if (digitalRead(CL_SENS) == 0){
-    if (digitalRead(OP_SENS) == 0){
       door_status = 0;
-    }
   }
   // check if open
-  else if (digitalRead(CL_SENS) == 1){
-    if (digitalRead(OP_SENS) == 1){
+  else if (digitalRead(OP_SENS) == 1){
       door_status = 1;
-    }
   }
   return door_status;
 }
 
 void printTimes(int r, int g, int b, DateTime now, int lightval, int tempval){	
-      int doorStatus = digitalRead(CL_SENS);
+      int doorStatus = doorState();
       lcd.setRGB(r,g,b);
       delay(1000);
       lcd.clear();

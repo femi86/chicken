@@ -509,80 +509,11 @@ void setup() {
 // Main Loop: Once-per-minute blocking approach
 // ---------------------------------------------------------------------------
 void loop() {
-  // 1) read current time
-  handleSerialCommands();
-
-  DateTime now = rtc.now();
   
-  // 2) Check if RTC is stuck
-  uint32_t nowUnix = now.unixtime();
- // checkRTCStuck(nowUnix); // This might forcibly reset if stuck
-
-  // 3) daily update for sunrise/sunset
-  dailySunTimeUpdate(now);
-
-  // 4) update sensor data
-  currentLightVal = readLightSensor(5, 50);
-  delay(500);
-  t = rtc.getTemperature();
-  delay(3000);
-  TempLamp(); // temporarily disabled since temp sensor not working
-  //digitalWrite(REL_LAMP, v_on);//temporary override because of temperature sensor malfunction
-  // 5) determine state, do actions
-  timeofday newState = checktime(now);
-  currentState = newState;
-
-  switch (currentState) {
-    case night_:
-      Serial.println(F("Arduino mode: Night"));
-      Door("close");
-      digitalWrite(REL_RD, v_off);      
-      nightBlink(30); // blink for 30s
-      break;
-
-    case dawn_:
-      Serial.println(F("Arduino mode: Dawn"));
-      if (count == 5) {
-        Door("open");
-      }
-      break;
-
-    case day_:
-      Serial.println(F("Arduino mode: Day"));
-      if (digitalRead(OP_SENS) != 1) {
-         Door("open");
-      }
-      digitalWrite(REL_RD, v_off);
-      break;
-
-    case sundown_:
-      Serial.println(F("Arduino mode: Sundown"));
-      if (digitalRead(CL_SENS) == 1) {
-        digitalWrite(REL_RD, v_on);
-      } else {
-        digitalWrite(REL_RD, v_off);
-      }
-      digitalWrite(REL_BLINK, v_on);
-      break;
-
-    case dusk_:
-      Serial.println(F("Arduino mode: Dusk"));
-      digitalWrite(REL_BLINK, v_on);
-      Door("close");
-      digitalWrite(REL_RD, v_off);
-      // no daily reset
-      digitalWrite(RESET_PIN, HIGH);
-      break;
-
-    case between_states_:
-      Serial.println(F("Arduino mode: Between States"));
-      break;
+  delay(100);// 1) read current time
+  for (int i; i < 20; i++)  {
+    //digitalWrite(REL_OP,v_on);
+    delay(500);
   }
-
-  // 6) Print sensor + time info (two lines on Serial)
-  printTimes(now);
-
-  // 7) Wait 1 minute until next cycle
   delay(10000);
-}
-
+  }	

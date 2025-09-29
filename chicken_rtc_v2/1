@@ -1,0 +1,14 @@
+[Unit]
+Description=srf2 streaming
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+ExecStart=/usr/bin/cvlc -I dummy --alsa-audio-device sysdefault:CARD=Headphones http://stream.srg-ssr.ch/drs2/aacp_96.m3u
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

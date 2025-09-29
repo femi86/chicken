@@ -583,6 +583,6 @@ void loop() {
   printTimes(now);
 
   // 7) Wait 1 minute until next cycle
-  delay(10000);
+  delay(30000);
 }
 
