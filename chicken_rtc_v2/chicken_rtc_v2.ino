@@ -16,12 +16,14 @@
 #include <rgb_lcd.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 // ---------------------------------------------------------------------------
 // Pin Definitions
 // ---------------------------------------------------------------------------
 RTC_DS3231 rtc;   // SDA (A4), SCL (A5)
 rgb_lcd lcd;       // same lines as RTC (I2C bus)
 
+#define DS3231_ADDR 0x68
 #define REL_LAMP    2   // Relay for heating lamp
 #define REL_BLINK   3   // Relay for blinking light
 #define REL_OP      4   // Relay to open the door
@@ -40,8 +42,7 @@ rgb_lcd lcd;       // same lines as RTC (I2C bus)
 // ---------------------------------------------------------------------------
 #define test_mode   0   // If >0, some debug / test behavior
 #define sens        1   // Hysteresis threshold for sensors (unused here)
-#define criticalT   4   // Temp in °C below which lamp is turned on
-#define DAWN        80  // Light sensor threshold for dawn
+#define DAWN        100 // Light sensor threshold for dawn
 #define DAY         600 // Light threshold for day
 #define buff        90 // Buffer (minutes) around sunrise/sunset
 
@@ -51,13 +52,14 @@ rgb_lcd lcd;       // same lines as RTC (I2C bus)
 #define second_1    1000// 1 second in ms
 #define RPT         5 // the repetition for dawn
 
-
+static float t = 0.0f;
+static const float criticalT = 4.0f;
 // Sunrise/sunset location/timezone
 double lat = 47.3739;
 double lon = 8.5451;
 int    tz  = 2;       // base timezone offset
 int    spring = 86;   // DOY for daylight saving start
-int    fall   = 304;  // DOY for daylight saving end
+int    fall   = 300;  // DOY for daylight saving end
 
 // Sunrise/sunset (minutes from midnight)
 int srise = 0;
@@ -68,7 +70,6 @@ int lampState    = 0;   // 0 = off, 1 = on
 int v_on, v_off;        // Relay signals for ON/OFF
 int day_ct       = 0;   // times we have read 'day' in a row
 int count        = 0;   // how many times we see “dawn”
-float t;
 int limitReached = -1;
 
 // We'll keep final computed temp & light globally
@@ -121,6 +122,20 @@ int check_date(DateTime now) {
     case 12: day_t += 31 + feb + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30; break;
   }
   return day_t;
+}
+
+
+float readDS3231Temperature() {
+  Wire.beginTransmission(DS3231_ADDR);
+  Wire.write(0x11);  // temperature MSB register
+  Wire.endTransmission(false);
+  Wire.requestFrom(DS3231_ADDR, 2);
+
+  int8_t msb = Wire.read();       // signed byte!
+  uint8_t lsb = Wire.read();      // bits 7:6 hold quarter-degree fractions
+
+  float temp = msb + ((lsb >> 6) * 0.25f);
+  return temp;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,35 +213,50 @@ void TempLamp() {
 // ---------------------------------------------------------------------------
 // Door Control
 // ---------------------------------------------------------------------------
+#include <string.h>  // make sure this is included at the top
+
 void Door(const char* state){
-  int SENS, REL, LIM;
+  int SENS = -1, REL = -1, LIM = -1;
   int consRead = 0;
-  int FREE = 0;
-  int END = 1;
-  if (state=="close") {
+  const int END = 1;
+
+  if (strcmp(state, "close") == 0) {
     SENS = CL_SENS;
     REL  = REL_CL;
-    LIM = 0;
-  } 
-  else if (state=="open"){
+    LIM  = 0;
+  }
+  else if (strcmp(state, "open") == 0){
     SENS = OP_SENS;
     REL  = REL_OP;
-    LIM = 1;
+    LIM  = 1;
+  } else {
+    return;
   }
+
   digitalWrite(REL, v_on);
-    while (true) {
-      digitalWrite(REL, v_on);
-      delay(50);
-      if (digitalRead(SENS) == END){
-        consRead++;
-      }else{
-	consRead = 0;
-      }
-      if (consRead >= 3){
-	limitReached = LIM;
-	break;
-	}
+
+  unsigned long start = millis();
+  unsigned long timeoutMs = (unsigned long)T_MOT * 1000UL + 5000UL; // 25s with your T_MOT=20
+
+  while (true) {
+    delay(50);
+
+    if (digitalRead(SENS) == END) consRead++;
+    else consRead = 0;
+
+    if (consRead >= 3){
+      limitReached = LIM;
+      break;
     }
+
+    if (millis() - start > timeoutMs) {
+      // do NOT print extra lines if your parser is that fragile
+      // just fail safe:
+      limitReached = -1;
+      break;
+    }
+  }
+
   digitalWrite(REL, v_off);
 }
 
@@ -498,6 +528,9 @@ void setup() {
   DateTime initNow = rtc.now();
   sun_time(lat, lon, tz, initNow);
   lastCalculatedDay = check_date(initNow);
+  if (digitalRead(CL_SENS) == 1) limitReached = 0;
+  else if (digitalRead(OP_SENS) == 1) limitReached = 1;
+  else limitReached = -1;
 
 
   // Store the initial valid time
@@ -524,7 +557,7 @@ void loop() {
   // 4) update sensor data
   currentLightVal = readLightSensor(5, 50);
   delay(500);
-  t = rtc.getTemperature();
+  t = readDS3231Temperature();
   delay(3000);
   TempLamp(); // temporarily disabled since temp sensor not working
   //digitalWrite(REL_LAMP, v_on);//temporary override because of temperature sensor malfunction
