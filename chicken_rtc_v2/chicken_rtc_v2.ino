@@ -218,17 +218,19 @@ void TempLamp() {
 void Door(const char* state){
   int SENS = -1, REL = -1, LIM = -1;
   int consRead = 0;
-  const int END = 1;
+  int END = -1;
 
   if (strcmp(state, "close") == 0) {
     SENS = CL_SENS;
     REL  = REL_CL;
     LIM  = 0;
+    END  = 0;
   }
   else if (strcmp(state, "open") == 0){
     SENS = OP_SENS;
     REL  = REL_OP;
     LIM  = 1;
+    END  = 1;
   } else {
     return;
   }
@@ -375,6 +377,10 @@ void printTimes(DateTime now) {
   Serial.print(currentLightVal); // e.g. 300
   Serial.print(", Door=");
   Serial.print(door_status);     // e.g. 1 or 0
+  Serial.print(", ClSens=");
+  Serial.print(digitalRead(CL_SENS));
+  Serial.print(", OpSens=");
+  Serial.print(digitalRead(OP_SENS));
   Serial.print(", Lamp=");
   Serial.println(!digitalRead(REL_LAMP));     // e.g. 1 or 0, normally lampState but bypassed currently
   delay(10);
@@ -528,10 +534,10 @@ void setup() {
   DateTime initNow = rtc.now();
   sun_time(lat, lon, tz, initNow);
   lastCalculatedDay = check_date(initNow);
-  if (digitalRead(CL_SENS) == 1) limitReached = 0;
+  
+  if (digitalRead(CL_SENS) == 0) limitReached = 0;
   else if (digitalRead(OP_SENS) == 1) limitReached = 1;
   else limitReached = -1;
-
 
   // Store the initial valid time
   lastValidUnix = initNow.unixtime();
@@ -582,7 +588,7 @@ void loop() {
 
     case day_:
       Serial.println(F("Arduino mode: Day"));
-      if (digitalRead(OP_SENS) != 1) {
+      if (doorState() != 1) {
          Door("open");
       }
       digitalWrite(REL_RD, v_off);
@@ -590,7 +596,7 @@ void loop() {
 
     case sundown_:
       Serial.println(F("Arduino mode: Sundown"));
-      if (digitalRead(CL_SENS) == 1) {
+      if (doorState() == 0) {
         digitalWrite(REL_RD, v_on);
       } else {
         digitalWrite(REL_RD, v_off);
